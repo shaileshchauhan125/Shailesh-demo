@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ludo Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Player Selection Modal -->
+    <div id="player-selection-modal" class="modal">
+        <div class="modal-content">
+            <div class="welcome-header">
+                <h2>Welcome, <span id="player-name-display">Player</span>!</h2>
+                <p id="game-mode-subtitle">Select Number of Players</p>
+            </div>
+            <div id="offline-player-selection">
+                <div class="player-options">
+                    <button class="player-btn" data-players="2">2 Players</button>
+                    <button class="player-btn" data-players="3">3 Players</button>
+                    <button class="player-btn" data-players="4">4 Players</button>
+                </div>
+                <div id="player-color-selection" class="player-color-selection" style="display: none;">
+                    <h3>Select Colors for Players</h3>
+                    <div id="color-options"></div>
+                    <button id="start-game-btn" style="display: none;">Start Game</button>
+                </div>
+            </div>
+            <div id="online-room-join" style="display: none;">
+                <div class="room-join-content">
+                    <h3>🌐 Joining Online Room</h3>
+                    <p id="room-join-message">Connecting to room...</p>
+                    <div id="room-info" style="display: none;">
+                        <h4>Room: <span id="room-name-display"></span></h4>
+                        <p>Room Code: <span id="room-code-display"></span></p>
+                        <div class="name-input-section">
+                            <label for="join-player-name">Enter Your Name:</label>
+                            <input type="text" id="join-player-name" placeholder="Your Name">
+                            <button id="join-room-game-btn" class="primary-btn">Join Game</button>
+                        </div>
+                    </div>
+                    <div id="room-error" style="display: none;">
+                        <p style="color: red;">❌ Room not found or expired</p>
+                        <button id="back-to-lobby-btn" class="secondary-btn">Back to Lobby</button>
+                    </div>
+                </div>
+            </div>
+            <div class="game-info">
+                <p>Created by <strong>Shailesh Chauhan</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <div class="board-wrapper">
+            <div id="ludo-board"></div>
+            <!-- Individual dice for each player -->
+            <div id="red-dice" class="player-dice red-dice" data-player="red">🎲</div>
+            <div id="green-dice" class="player-dice green-dice" data-player="green">🎲</div>
+            <div id="yellow-dice" class="player-dice yellow-dice" data-player="yellow">🎲</div>
+            <div id="blue-dice" class="player-dice blue-dice" data-player="blue">🎲</div>
+        </div>
+        <div class="controls">
+            <div id="game-status">Welcome! Please login first</div>
+            <div class="game-header">
+                <p>🎲 Ludo Master by <strong>Shailesh Chauhan</strong></p>
+                <button id="back-to-login" class="back-btn">← Back to Login</button>
+            </div>
+        </div>
+    </div>
+    <div id="winner-overlay" class="winner-overlay">
+        <div class="winner-box">
+            <h2 id="winner-message"></h2>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
