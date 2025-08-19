@@ -748,3 +748,69 @@ body {
         font-size: 3em;
     }
 }
+
+/* Player Count and Host Information Styles */
+.player-count-info {
+    margin-top: 15px;
+    padding: 15px;
+    background: linear-gradient(135deg, #2d2d2d, #3d3d3d);
+    border-radius: 10px;
+    border: 1px solid #444;
+}
+
+.count-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.count-display strong {
+    color: var(--primary-color);
+    font-size: 1.1em;
+}
+
+.host-badge {
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.85em;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.ready-message {
+    color: var(--primary-color);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.waiting-message {
+    color: var(--accent-color);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-style: italic;
+}
+
+#start-online-game-btn {
+    margin-top: 10px;
+    background: linear-gradient(135deg, var(--primary-color), #45a049);
+    transition: all 0.3s ease;
+}
+
+#start-online-game-btn:disabled {
+    background: linear-gradient(135deg, #666, #555);
+    color: #999;
+    cursor: not-allowed;
+}
+
+#start-online-game-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #45a049, var(--primary-color));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}

@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameStarted = false;
     let isOnlineGame = false;
     let currentRoomData = null;
+    let multiplayerClient = null; // For online game communication
 
     const allPlayers = ['red', 'green', 'yellow', 'blue'];
     const colors = { red: '#ff4d4d', green: '#4caf50', yellow: '#ffeb3b', blue: '#2196f3' };
@@ -119,16 +120,134 @@ document.addEventListener('DOMContentLoaded', () => {
             currentRoomData = JSON.parse(roomData);
             isOnlineGame = true;
             
+            // Initialize multiplayer client for online games
+            initializeMultiplayerClient();
+            
             // Auto-start online game with room data
-            activePlayers = ['red', 'green', 'yellow', 'blue'].slice(0, currentRoomData.players.length);
+            // Only assign real players, no bots in online mode
+            activePlayers = currentRoomData.players.map((p, idx) => ['red', 'green', 'yellow', 'blue'][idx]);
             gameStarted = true;
             playerSelectionModal.style.display = 'none';
+            
+            // Determine local player color based on their position in the room
+            const localPlayerName = localStorage.getItem('playerName');
+            
+            // Find the local player's index in the room and assign corresponding color
+            let localPlayerIndex = -1;
+            if (currentRoomData.players && Array.isArray(currentRoomData.players)) {
+                localPlayerIndex = currentRoomData.players.findIndex(p => {
+                    // Try different name matching strategies
+                    return p.name === localPlayerName || 
+                           p.name?.trim() === localPlayerName?.trim() ||
+                           p.name?.toLowerCase() === localPlayerName?.toLowerCase();
+                });
+            }
+            
+            if (localPlayerIndex !== -1 && localPlayerIndex < activePlayers.length) {
+                const localPlayerColor = activePlayers[localPlayerIndex];
+                sessionStorage.setItem('localPlayerColor', localPlayerColor);
+            } else {
+                // Fallback: assign based on player count or default to red
+                const fallbackColor = activePlayers[0] || 'red';
+                sessionStorage.setItem('localPlayerColor', fallbackColor);
+            }
+            
+            // Show dice for active players in online game
+            allPlayers.forEach(player => {
+                const dice = playerDice[player];
+                if (activePlayers.includes(player)) {
+                    dice.style.display = 'flex';
+                } else {
+                    dice.style.display = 'none';
+                }
+            });
+            
             initGame();
             return;
         }
         
         // Fallback to offline if no room data
         handleOfflineGameSelection();
+    }
+    
+    function initializeMultiplayerClient() {
+        if (typeof LudoMultiplayerClient !== 'undefined') {
+            multiplayerClient = new LudoMultiplayerClient();
+            
+            // Set up game update handler
+            multiplayerClient.onGameUpdate = (eventType, gameState, players, actionType, actionData) => {
+                
+                if (actionType === 'dice_roll' || actionType === 'diceRoll') {
+                    // Handle dice roll from other players
+                    handleRemoteDiceRoll(actionData);
+                } else if (actionType === 'move_token' || actionType === 'token_move' || actionType === 'tokenMove') {
+                    // Handle token move from other players
+                    handleRemoteTokenMove(actionData);
+                } else if (actionType === 'next_turn' || actionType === 'turn_change' || actionType === 'turnChange') {
+                    // Handle turn change
+                    handleRemoteTurnChange(actionData);
+                } else {
+                }
+            };
+            
+            // Connect to server
+            multiplayerClient.connect().then(() => {
+            }).catch(error => {
+                console.error('Failed to connect multiplayer client:', error);
+            });
+        } else {
+            console.error('LudoMultiplayerClient not available');
+        }
+    }
+    
+    function handleRemoteDiceRoll(diceData) {
+        
+        // Update dice value and current player state
+        diceValue = diceData.value;
+        
+        // If player info is provided, update current player index
+        if (diceData.playerIndex !== undefined) {
+            currentPlayerIndex = diceData.playerIndex;
+        }
+        
+        const currentPlayer = activePlayers[currentPlayerIndex];
+        const currentDice = playerDice[currentPlayer];
+        
+        if (currentDice) {
+            currentDice.textContent = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][diceValue - 1];
+            diceRolled = true;
+            status.textContent = `${playerNames[currentPlayer]} rolled a ${diceValue}`;
+            
+            // Update dice state
+            resetTurnVisuals();
+            currentDice.classList.add('active');
+            
+            checkMovableTokens();
+        } else {
+            console.error('Could not find dice for player:', currentPlayer);
+        }
+    }
+    
+    function resetTurnVisuals() {
+        // Reset all dice visual states
+        Object.values(playerDice).forEach(dice => {
+            dice.classList.remove('active');
+        });
+    }
+    
+    function handleRemoteTokenMove(moveData) {
+        // Find the token to move
+        const playerTokens = tokens[moveData.color];
+        const token = playerTokens.find(t => t.id === moveData.tokenId);
+        
+        if (token) {
+            // Update token position
+            token.position = moveData.position;
+            token.isHome = moveData.isHome;
+            
+            // Update the board display
+            updateBoard();
+        }
     }
     
     function handleOfflineGameSelection() {
@@ -148,6 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showColorSelection();
             });
         });
+    //     if (token.position === -1 && diceValue === 6) {
+    // // Token leaving base
+    //         token.position = startPositions[token.color];
+        // }
         
         // Add event listener for start game button
         startGameBtn.addEventListener('click', startGame);
@@ -274,9 +397,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             playerDiv.appendChild(colorRow);
             colorOptions.appendChild(playerDiv);
+
         }
+
     }
-    
+    // if (tokens.position === -1 && diceValue === 6) {
+    // // Token leaving base
+    //     tokens.position = startPositions[tokens.color];
+    //     }
+    // }
+
     function selectColor(colorBtn, playerIndex, color) {
         // Remove previous selection for this player
         const previousSelection = document.querySelector(`[data-player="${playerIndex}"].selected`);
@@ -312,7 +442,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Hide modal
         playerSelectionModal.style.display = 'none';
         gameStarted = true;
-        
+    //     if (tokens.position === -1 && diceValue === 6) {
+    // // Token leaving base
+    //         tokens.position = startPositions[tokens.color];
+    //         }
+       // }
+
         // Filter active players and hide inactive dice
         allPlayers.forEach(player => {
             const dice = playerDice[player];
@@ -431,8 +566,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function rollDice() {
         if (diceRolled) return;
+        
         const currentPlayer = activePlayers[currentPlayerIndex];
         const currentDice = playerDice[currentPlayer];
+        
+        if (isOnlineGame) {
+            const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+            // Only allow dice roll if it's the local player's turn
+            if (currentPlayer !== localPlayerColor) {
+                return;
+            }
+        }
+        
+        if (!currentDice) {
+            console.error('Could not find dice element for player:', currentPlayer);
+            return;
+        }
         
         currentDice.classList.add('rolling');
         
@@ -441,6 +590,21 @@ document.addEventListener('DOMContentLoaded', () => {
             currentDice.textContent = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][diceValue - 1];
             currentDice.classList.remove('rolling');
             diceRolled = true;
+            lastDiceValue = diceValue;
+            
+            // Send dice roll to multiplayer server if online
+            if (isOnlineGame && multiplayerClient && multiplayerClient.isConnected) {
+                try {
+                    multiplayerClient.sendGameAction('dice_roll', {
+                        player: currentPlayer,
+                        value: diceValue,
+                        playerIndex: currentPlayerIndex
+                    });
+                } catch (error) {
+                    console.error('Failed to send dice roll:', error);
+                }
+            }
+            
             status.textContent = `${playerNames[currentPlayer]} rolled a ${diceValue}`;
             checkMovableTokens();
         }, 500);
@@ -459,16 +623,145 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (movableTokens.length === 0) {
-            setTimeout(nextTurn, 1000);
+            // In online games, only advance turn if it's the local player's turn
+            if (isOnlineGame) {
+                const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+                if (currentPlayer === localPlayerColor) {
+                    setTimeout(nextTurn, 1000);
+                } else {
+                }
+            } else {
+                // Offline game - advance turn normally
+                setTimeout(nextTurn, 1000);
+            }
         } else if (movableTokens.length === 1) {
             // Automatically move the only available token after a short delay
-            setTimeout(() => {
-                if (movableTokens[0].element.classList.contains('movable')) {
-                    moveToken(movableTokens[0]);
+            // In online games, only auto-move if it's the local player's turn
+            if (isOnlineGame) {
+                const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+                if (currentPlayer === localPlayerColor) {
+                    setTimeout(() => {
+                        if (movableTokens[0].element.classList.contains('movable')) {
+                            moveToken(movableTokens[0]);
+                        }
+                    }, 1000);
+                } else {
                 }
-            }, 1000);
+            } else {
+                // Offline game - auto-move normally
+                setTimeout(() => {
+                    if (movableTokens[0].element.classList.contains('movable')) {
+                        moveToken(movableTokens[0]);
+                    }
+                }, 1000);
+            }
         }
         // If multiple tokens are movable, player needs to choose manually
+    }
+
+    // Handle remote dice rolls from other players in online games
+    function handleRemoteDiceRoll(data) {
+        
+        if (!isOnlineGame) {
+            return;
+        }
+        
+        const { player, value, playerIndex } = data;
+        const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+
+        // Only process if it's not from the local player
+        if (player === localPlayerColor) {
+            return;
+        }
+        
+        // Update the dice display for the remote player
+        const remoteDice = playerDice[player];
+        if (remoteDice) {
+            remoteDice.textContent = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][value - 1];
+            remoteDice.classList.remove('rolling');
+        } else {
+            console.error('❌ Could not find dice element for remote player:', player);
+        }
+        
+        // Update game state if this matches current turn
+        if (activePlayers[currentPlayerIndex] === player) {
+            diceValue = value;
+            diceRolled = true;
+            lastDiceValue = value;
+            
+            status.textContent = `${playerNames[player]} rolled a ${value}`;
+            
+            // Check movable tokens for remote player
+            setTimeout(() => {
+                checkMovableTokens();
+            }, 500);
+        } else {
+        }
+    }
+
+    // Handle remote token moves from other players in online games
+    function handleRemoteTokenMove(data) {
+        
+        if (!isOnlineGame) {
+            return;
+        }
+        
+        const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+        
+        // Only process if it's not from the local player
+        if (data.color === localPlayerColor) {
+            return;
+        }
+
+        // Find the token that was moved
+        const playerTokens = tokens[data.color];
+        if (playerTokens) {
+            const movedToken = playerTokens.find(t => t.id === data.tokenId);
+            if (movedToken) {
+                
+                // Update token position
+                movedToken.position = data.position;
+                movedToken.isHome = data.isHome;
+                
+                // Update visual position on board
+                updateBoard();
+                
+            } else {
+                console.error('❌ Could not find remote token with ID:', data.tokenId);
+            }
+        } else {
+            console.error('❌ Could not find player tokens for color:', data.color);
+        }
+    }
+
+    // Handle remote turn changes from other players in online games
+    function handleRemoteTurnChange(data) {
+        
+        if (!isOnlineGame) {
+            return;
+        }
+        
+        const { currentPlayerIndex: newPlayerIndex, currentPlayer: newPlayer, previousPlayer } = data;
+        const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+
+        // Show transition message
+        const oldPlayerName = previousPlayer ? (playerNames[previousPlayer] || previousPlayer.charAt(0).toUpperCase() + previousPlayer.slice(1)) : 'Previous Player';
+        const newPlayerName = playerNames[newPlayer] || newPlayer.charAt(0).toUpperCase() + newPlayer.slice(1);
+        
+        status.textContent = `🔄 ${oldPlayerName} → ${newPlayerName}`;
+        status.style.color = colors[newPlayer];
+        
+        // Update the current player index
+        if (typeof newPlayerIndex === 'number' && newPlayerIndex >= 0 && newPlayerIndex < activePlayers.length) {
+            currentPlayerIndex = newPlayerIndex;
+            
+            // Small delay before resetting turn to show the transition
+            setTimeout(() => {
+                resetTurn();
+            }, 500);
+        } else {
+            console.error('❌ Invalid player index in remote turn change:', newPlayerIndex);
+        }
     }
     
     function isMovable(token) {
@@ -537,17 +830,65 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBoard();
         const captureOccurred = checkCapture(token);
         
+        // Send token move to multiplayer server if online
+        if (isOnlineGame && multiplayerClient) {
+            multiplayerClient.sendGameAction('move_token', {
+                tokenId: token.id,
+                color: token.color,
+                position: token.position,
+                isHome: token.isHome
+            });
+        }
+        
         // Player gets another turn if they rolled a 6, captured a token, or reached home
         if (diceValue === 6 || token.isHome || captureOccurred) {
-            resetTurn();
+            
+            // Show message for bonus turn
+            const playerDisplayName = playerNames[token.color] || token.color.charAt(0).toUpperCase() + token.color.slice(1);
+            let bonusReason = '';
+            if (diceValue === 6) bonusReason = 'rolled a 6';
+            else if (token.isHome) bonusReason = 'reached home';
+            else if (captureOccurred) bonusReason = 'captured a token';
+            
+            status.textContent = `🎉 ${playerDisplayName} gets another turn (${bonusReason})!`;
+            status.style.color = colors[token.color];
+            
+            setTimeout(() => {
+                resetTurn();
+            }, 1500);
         } else {
-            nextTurn();
+            // In online games, only the player who moved should advance the turn
+            if (isOnlineGame) {
+                const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+                if (token.color === localPlayerColor) {
+                    
+                    // Show turn ending message
+                    const playerDisplayName = playerNames[token.color] || token.color.charAt(0).toUpperCase() + token.color.slice(1);
+                    status.textContent = `✅ ${playerDisplayName}'s turn complete`;
+                    status.style.color = colors[token.color];
+                    
+                    setTimeout(() => {
+                        nextTurn();
+                    }, 1000);
+                } else {
+                }
+            } else {
+                // Offline game - advance turn normally
+                
+                const playerDisplayName = playerNames[token.color] || token.color.charAt(0).toUpperCase() + token.color.slice(1);
+                status.textContent = `✅ ${playerDisplayName}'s turn complete`;
+                status.style.color = colors[token.color];
+                
+                setTimeout(() => {
+                    nextTurn();
+                }, 1000);
+            }
         }
         checkWin();
     }
     
     function updateBoard() {
-        players.forEach(player => {
+        activePlayers.forEach(player => {
             tokens[player].forEach(token => {
                 let targetCell;
                 if (token.position === -1) {
@@ -629,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function findTokenByElement(el) {
-        for (const player of players) {
+        for (const player of activePlayers) {
             for (const token of tokens[player]) {
                 if (token.element === el) {
                     return token;
@@ -640,8 +981,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function nextTurn() {
+        const oldPlayerIndex = currentPlayerIndex;
+        const oldPlayer = activePlayers[oldPlayerIndex];
         currentPlayerIndex = (currentPlayerIndex + 1) % activePlayers.length;
-        resetTurn();
+        const newPlayer = activePlayers[currentPlayerIndex];
+
+        // Show transition message
+        const oldPlayerName = playerNames[oldPlayer] || oldPlayer.charAt(0).toUpperCase() + oldPlayer.slice(1);
+        const newPlayerName = playerNames[newPlayer] || newPlayer.charAt(0).toUpperCase() + newPlayer.slice(1);
+        
+        // Brief transition message
+        status.textContent = `🔄 ${oldPlayerName} → ${newPlayerName}`;
+        status.style.color = colors[newPlayer];
+        
+        // Send turn change to multiplayer server if online
+        if (isOnlineGame && multiplayerClient && multiplayerClient.isConnected) {
+            try {
+                multiplayerClient.sendGameAction('next_turn', { 
+                    currentPlayerIndex: currentPlayerIndex,
+                    currentPlayer: activePlayers[currentPlayerIndex],
+                    previousPlayer: oldPlayer
+                });
+            } catch (error) {
+                console.error('❌ Failed to send turn change:', error);
+            }
+        } else {
+        }
+        
+        // Small delay before resetting turn to show the transition
+        setTimeout(() => {
+            resetTurn();
+        }, 500);
     }
 
     function updateStatus() {
@@ -656,19 +1026,54 @@ document.addEventListener('DOMContentLoaded', () => {
         diceRolled = false;
         diceValue = 0;
         
-        // Reset all dice to inactive state
-        Object.values(playerDice).forEach(dice => {
-            dice.classList.remove('active');
-            dice.textContent = '🎲';
+        const currentPlayer = activePlayers[currentPlayerIndex];
+        
+        // Clear all movable token highlights first
+        document.querySelectorAll('.token').forEach(token => {
+            token.classList.remove('movable');
         });
         
-        // Activate current player's dice
-        const currentPlayer = activePlayers[currentPlayerIndex];
-        const currentDice = playerDice[currentPlayer];
-        currentDice.classList.add('active');
+        // Reset all dice to inactive state and clear their values
+        Object.values(playerDice).forEach(dice => {
+            if (dice) {
+                dice.classList.remove('active', 'rolling');
+                dice.textContent = '🎲';
+                dice.style.animation = 'none';
+            }
+        });
         
-        status.textContent = `${playerNames[currentPlayer]}'s turn`;
+        // Activate current player's dice with visual emphasis
+        const currentDice = playerDice[currentPlayer];
+        if (currentDice) {
+            currentDice.classList.add('active');
+            // Add a subtle animation to show it's active
+            currentDice.style.animation = 'pulse 2s infinite';
+        }
+        
+        // Update status with enhanced messaging
+        const playerDisplayName = playerNames[currentPlayer] || currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1);
+        status.textContent = `🎲 ${playerDisplayName}'s Turn`;
         status.style.color = colors[currentPlayer];
+        
+        // For online games, show if it's the local player's turn
+        if (isOnlineGame) {
+            const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+            const isLocalPlayerTurn = currentPlayer === localPlayerColor;
+            
+            if (isLocalPlayerTurn) {
+                status.textContent = `🎲 Your Turn! (${playerDisplayName})`;
+                status.style.fontWeight = 'bold';
+                // Add visual emphasis for local player turn
+                if (currentDice) {
+                    currentDice.style.boxShadow = '0 0 15px ' + colors[currentPlayer];
+                }
+            } else {
+                status.textContent = `⏳ ${playerDisplayName}'s Turn`;
+                status.style.fontWeight = 'normal';
+            }
+        } else {
+            status.style.fontWeight = 'bold';
+        }
     }
 
     function checkWin() {
@@ -696,7 +1101,17 @@ document.addEventListener('DOMContentLoaded', () => {
     Object.entries(playerDice).forEach(([player, dice]) => {
         dice.addEventListener('click', () => {
             if (gameStarted && activePlayers[currentPlayerIndex] === player) {
-                rollDice();
+                // In online games, only allow the current player to roll dice
+                if (isOnlineGame) {
+                    // Check if this is the local player's turn
+                    const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+                    if (player === localPlayerColor) {
+                        rollDice();
+                    }
+                } else {
+                    // Offline game - allow any player
+                    rollDice();
+                }
             }
         });
     });
@@ -719,67 +1134,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize player selection instead of starting game immediately
     initPlayerSelection();
 });
-const currentPathIndex = pathCoords.findIndex(p => p.r === token.element.parentElement.style.gridRow.slice(0,-2) && p.c === token.element.parentElement.style.gridColumn.slice(0,-2)) + 1;
-if (existingTokens.length > 0 && !safeSpots.includes(token.position)) {
-    let offset = existingTokens.length * 5;
-    token.element.style.transform = `translate(${offset}px, ${offset}px)`;
-} else {
-    token.element.style.transform = 'translate(0,0)';
-}
-const stepsToHomeEntrance = (homeEntrance >= token.position) 
-    ? homeEntrance - token.position 
-    : (52 - token.position) + homeEntrance;
-// ...
-if (diceValue > stepsToHomeEntrance + 1) {
-    // Move token to home entrance
-    token.position = homeEntrance;
-}
-function moveToken(token) {
-    document.querySelectorAll('.movable').forEach(el => el.classList.remove('movable'));
 
-    // Case 1: Token is in the base, needs a 6 to get out
-    if (token.position === -1 && diceValue === 6) {
-        token.position = startPositions[token.color];
-    
-    // Case 2: Token is already in its final home path
-    } else if (token.position > 51) {
-        const homePath = homePaths[token.color];
-        const currentHomeIndex = homePath.indexOf(token.position);
-        token.position = homePath[currentHomeIndex + diceValue];
-
-    // Case 3: Token is on the main board
-    } else {
-        const homeEntrance = homeEntrances[token.color];
-        // The last square on the main path before the token's home path entrance.
-        const lapEndPosition = (homeEntrance - 1 > 0) ? homeEntrance - 1 : 52; 
-
-        // Check if the move will pass or land on the entrance
-        let newPos = token.position + diceValue;
-
-        // Logic to handle entering the home path
-        if ( (token.position <= lapEndPosition && newPos > lapEndPosition) || 
-             (lapEndPosition < token.position && newPos > 52 && (newPos % 52) > lapEndPosition) ) {
-            
-            const stepsIntoHome = newPos - lapEndPosition - 1;
-            token.position = homePaths[token.color][stepsIntoHome];
-        } else {
-            // Standard move on the circular main path
-            token.position = (token.position + diceValue - 1) % 52 + 1;
-        }
-    }
-    
-    // Check if token reached the final home spot
-    if (token.position === homePaths[token.color][5]) {
-        token.isHome = true;
-    }
-
-    updateBoard();
-    checkCapture(token);
-    
-    if (diceValue === 6 || token.isHome || captureWasMade) { // Assume checkCapture returns true on a capture
-        resetTurn(); // Give player another turn
-    } else {
-        nextTurn();
-    }
-    checkWin();
-}

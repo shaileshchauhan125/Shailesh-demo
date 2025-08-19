@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRoom = null;
     let invitedFriends = [];
     
+    // Initialize multiplayer client
+    let multiplayerClient = null;
+    
     // Initialize the page
     init();
     
@@ -348,13 +351,17 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePlayersInRoom();
         setupWaitingRoomActions();
         
-        // Simulate friends joining
-        simulateFriendsJoining();
+        // Room is ready for real players to join
     }
     
     function updatePlayersInRoom() {
         const playersList = document.getElementById('players-in-room');
         playersList.innerHTML = '';
+        
+        const onlinePlayers = currentRoom.players.filter(p => p.status === 'online');
+        
+        // Only the original room creator is the host
+        const isHost = multiplayerClient && multiplayerClient.isHost;
         
         currentRoom.players.forEach(player => {
             const li = document.createElement('li');
@@ -365,9 +372,31 @@ document.addEventListener('DOMContentLoaded', () => {
             playersList.appendChild(li);
         });
         
-        // Enable start button if enough players
+        // Add player count display for host
+        const playerCountDiv = document.createElement('div');
+        playerCountDiv.className = 'player-count-info';
+        playerCountDiv.innerHTML = `
+            <div class="count-display">
+                <strong>Players: ${onlinePlayers.length}/${currentRoom.maxPlayers || 4}</strong>
+                ${isHost ? '<span class="host-badge">You are the Host</span>' : ''}
+            </div>
+            ${isHost && onlinePlayers.length >= 2 ? '<div class="ready-message">✓ Ready to start game!</div>' : ''}
+            ${isHost && onlinePlayers.length < 2 ? '<div class="waiting-message">⏳ Waiting for more players...</div>' : ''}
+        `;
+        playersList.appendChild(playerCountDiv);
+        
+        // Enable start button only for host with enough players
         const startBtn = document.getElementById('start-online-game-btn');
-        startBtn.disabled = currentRoom.players.filter(p => p.status === 'online').length < 2;
+        if (startBtn) {
+            startBtn.disabled = !isHost || onlinePlayers.length < 2;
+            startBtn.style.display = isHost ? 'block' : 'none';
+            
+            if (isHost) {
+                startBtn.textContent = onlinePlayers.length >= 2 ? 
+                    `Start Game (${onlinePlayers.length} Players)` : 
+                    `Need ${2 - onlinePlayers.length} More Player${2 - onlinePlayers.length === 1 ? '' : 's'}`;
+            }
+        }
     }
     
     function setupWaitingRoomActions() {
@@ -376,29 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('close-room-btn').addEventListener('click', closeGameRoom);
     }
     
-    function simulateFriendsJoining() {
-        // Simulate friends joining over time
-        const joinTimes = [3000, 7000, 12000];
-        const friendNames = ['Alex', 'Sarah', 'Mike'];
-        
-        joinTimes.forEach((time, index) => {
-            setTimeout(() => {
-                if (currentRoom && index < friendNames.length) {
-                    currentRoom.players.push({
-                        name: friendNames[index],
-                        phone: `+1555000${index + 100}`,
-                        status: 'online'
-                    });
-                    updatePlayersInRoom();
-                    
-                    // Show notification
-                    showNotification(`${friendNames[index]} joined the room!`);
-                }
-            }, time);
-        });
-    }
-    
-    function createGameRoom() {
+    async function createGameRoom() {
         const roomName = document.getElementById('roomNameCreate').value.trim();
         const maxPlayers = document.getElementById('maxPlayers').value;
         const password = document.getElementById('roomPassword').value.trim();
@@ -408,28 +415,46 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        const playerName = playerNameInput.value.trim();
+        if (!playerName) {
+            alert('Please enter your name!');
+            return;
+        }
+        
+        // Get host phone from the form
+        const hostPhone = hostPhoneInput ? hostPhoneInput.value.trim() : playerName;
+        
         hideModal(roomModal);
         showModal(statusModal);
+        document.getElementById('status-text').textContent = 'Connecting to server...';
         
-        document.getElementById('status-text').textContent = 'Creating room...';
-        
-        setTimeout(() => {
-            const roomId = generateRoomId();
-            currentRoom = {
-                id: roomId,
-                name: roomName,
-                host: playerNameInput.value.trim(),
-                maxPlayers: parseInt(maxPlayers),
-                password: password,
-                players: [{ name: playerNameInput.value.trim(), status: 'online' }]
-            };
+        try {
+            // Initialize multiplayer client if not already done
+            if (!multiplayerClient) {
+                multiplayerClient = new LudoMultiplayerClient();
+                setupMultiplayerCallbacks();
+            }
             
-            document.querySelector('.status-message').style.display = 'none';
-            showWaitingRoom(roomId);
-        }, 2000);
+            // Connect to server
+            if (!multiplayerClient.isConnected) {
+                await multiplayerClient.connect();
+            }
+            
+            document.getElementById('status-text').textContent = 'Creating room...';
+            
+            // Create room with host phone
+            multiplayerClient.createRoom(roomName, playerName, parseInt(maxPlayers), hostPhone);
+            
+        } catch (error) {
+            console.error('Error creating room:', error);
+            document.getElementById('status-text').textContent = 'Failed to connect to server. Please try again.';
+            setTimeout(() => {
+                hideModal(statusModal);
+            }, 3000);
+        }
     }
     
-    function joinGameRoom() {
+    async function joinGameRoom() {
         const roomCode = document.getElementById('roomCode').value.trim();
         const password = document.getElementById('joinPassword').value.trim();
         
@@ -438,44 +463,224 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        const playerName = playerNameInput.value.trim();
+        if (!playerName) {
+            alert('Please enter your name!');
+            return;
+        }
+        
         hideModal(roomModal);
         showModal(statusModal);
+        document.getElementById('status-text').textContent = 'Connecting to server...';
         
-        document.getElementById('status-text').textContent = 'Joining room...';
-        
-        // Simulate joining room
-        setTimeout(() => {
-            const success = Math.random() > 0.3; // 70% success rate
+        try {
+            // Initialize multiplayer client if not already done
+            if (!multiplayerClient) {
+                multiplayerClient = new LudoMultiplayerClient();
+                setupMultiplayerCallbacks();
+            }
             
-            if (success) {
-                // Simulate successful join
+            // Connect to server
+            if (!multiplayerClient.isConnected) {
+                await multiplayerClient.connect();
+            }
+            
+            document.getElementById('status-text').textContent = 'Joining room...';
+            
+            // Join room
+            multiplayerClient.joinRoom(roomCode, playerName);
+            
+        } catch (error) {
+            console.error('Error joining room:', error);
+            document.getElementById('status-text').textContent = 'Failed to connect to server. Please try again.';
+            setTimeout(() => {
+                hideModal(statusModal);
+            }, 3000);
+        }
+    }
+    
+    function setupMultiplayerCallbacks() {
+        multiplayerClient.onConnectionChange = (connected) => {
+            if (!connected) {
+                // Show reconnection message or redirect back to login
+            }
+        };
+        
+        multiplayerClient.onRoomUpdate = (eventType, roomData, playerName) => {
+            if (eventType === 'created') {
                 currentRoom = {
-                    id: roomCode,
-                    name: 'Friend\'s Game Room',
-                    host: 'Friend',
-                    players: [
-                        { name: 'Friend', status: 'online' },
-                        { name: playerNameInput.value.trim(), status: 'online' }
-                    ]
+                    id: roomData.room_id,
+                    name: roomData.room_name,
+                    host: roomData.host_name,
+                    hostPhone: roomData.host_phone || playerNameInput.value.trim(),
+                    maxPlayers: roomData.max_players || 4,
+                    players: roomData.players
                 };
+                multiplayerClient.isHost = true; // Mark as host since they created the room
+                
+                // Set local player color based on position in room (host is always first)
+                const localPlayerName = playerNameInput.value.trim();
+                const playerIndex = roomData.players.findIndex(p => p.name === localPlayerName);
+                if (playerIndex !== -1) {
+                    const colors = ['red', 'green', 'yellow', 'blue'];
+                    const localPlayerColor = colors[playerIndex];
+                    sessionStorage.setItem('localPlayerColor', localPlayerColor);
+                } else {
+                    // Fallback for host (should be first player)
+                    sessionStorage.setItem('localPlayerColor', 'red');
+                }
                 
                 document.querySelector('.status-message').style.display = 'none';
-                showWaitingRoom(roomCode);
-            } else {
-                document.getElementById('status-text').textContent = 'Failed to join room. Please check the room code and try again.';
-                setTimeout(() => {
-                    hideModal(statusModal);
-                }, 3000);
+                showWaitingRoom(roomData.room_id);
+                showNotification(`Room "${currentRoom.name}" created successfully!`);
+            } else if (eventType === 'joined') {
+                currentRoom = {
+                    id: roomData.room_id,
+                    name: roomData.room_name,
+                    host: roomData.host_name,
+                    hostPhone: roomData.host_phone,
+                    maxPlayers: roomData.max_players || 4,
+                    players: roomData.players
+                };
+                multiplayerClient.isHost = false; // Not the host since they joined
+                
+                // Set local player color based on position in room
+                const localPlayerName = playerNameInput.value.trim();
+                const playerIndex = roomData.players.findIndex(p => p.name === localPlayerName);
+                if (playerIndex !== -1) {
+                    const colors = ['red', 'green', 'yellow', 'blue'];
+                    const localPlayerColor = colors[playerIndex];
+                    sessionStorage.setItem('localPlayerColor', localPlayerColor);
+                } else {
+                    console.warn('⚠️ Could not find local player in room data on join');
+                }
+                
+                document.querySelector('.status-message').style.display = 'none';
+                showWaitingRoom(roomData.room_id);
+                showNotification(`Joined room "${currentRoom.name}" successfully!`);
+            } else if (eventType === 'player_joined') {
+                if (currentRoom) {
+                    currentRoom.players = roomData.players;
+                    
+                    // Update local player color in case positions changed
+                    const localPlayerName = playerNameInput.value.trim();
+                    const playerIndex = roomData.players.findIndex(p => p.name === localPlayerName);
+                    if (playerIndex !== -1) {
+                        const colors = ['red', 'green', 'yellow', 'blue'];
+                        const localPlayerColor = colors[playerIndex];
+                        sessionStorage.setItem('localPlayerColor', localPlayerColor);
+                    }
+                    
+                    updatePlayersInRoom();
+                    showNotification(`${playerName} joined the room!`);
+                }
+            } else if (eventType === 'player_left') {
+                if (currentRoom) {
+                    currentRoom.players = roomData.players;
+                    
+                    // Update local player color in case positions changed
+                    const localPlayerName = playerNameInput.value.trim();
+                    const playerIndex = roomData.players.findIndex(p => p.name === localPlayerName);
+                    if (playerIndex !== -1) {
+                        const colors = ['red', 'green', 'yellow', 'blue'];
+                        const localPlayerColor = colors[playerIndex];
+                        sessionStorage.setItem('localPlayerColor', localPlayerColor);
+                    }
+                    
+                    updatePlayersInRoom();
+                    showNotification(`${playerName || 'A player'} left the room`);
+                }
             }
-        }, 2000);
+        };
+        
+        multiplayerClient.onGameUpdate = (eventType, gameState, players, actionType, actionData) => {
+            if (eventType === 'started') {
+                // Game started, redirect to game page
+                localStorage.setItem('playerName', playerNameInput.value.trim());
+                localStorage.setItem('gameMode', 'online');
+                localStorage.setItem('roomData', JSON.stringify(currentRoom));
+                localStorage.setItem('multiplayerMode', 'true');
+                
+                window.location.href = 'game.html';
+            }
+        };
+        
+        multiplayerClient.onError = (error) => {
+            console.error('Multiplayer error:', error);
+            document.getElementById('status-text').textContent = `Error: ${error}`;
+            setTimeout(() => {
+                hideModal(statusModal);
+            }, 3000);
+        };
+    }
+    
+    function showNotification(message) {
+        // Create a simple notification
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            z-index: 10000;
+            font-family: 'Poppins', sans-serif;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
     }
     
     function startOnlineGame() {
-        localStorage.setItem('playerName', playerNameInput.value.trim());
-        localStorage.setItem('gameMode', 'online');
-        localStorage.setItem('roomData', JSON.stringify(currentRoom));
+        console.log('Starting online game...', {
+            multiplayerClient: !!multiplayerClient,
+            isHost: multiplayerClient ? multiplayerClient.isHost : 'no client',
+            currentRoom: currentRoom,
+            roomPlayers: currentRoom ? currentRoom.players : 'no room'
+        });
         
-        window.location.href = 'game.html';
+        // Verify host permission - only the original room creator can start
+        if (!multiplayerClient || !multiplayerClient.isHost) {
+            alert(`Only the host can start the game!\n\nDebug info:\n- Has client: ${!!multiplayerClient}\n- Is host: ${multiplayerClient ? multiplayerClient.isHost : 'no client'}`);
+            return;
+        }
+        
+        const onlinePlayers = currentRoom.players.filter(p => p.status === 'online');
+        
+        if (onlinePlayers.length < 2) {
+            alert(`Need at least 2 players to start. Currently have ${onlinePlayers.length} player${onlinePlayers.length === 1 ? '' : 's'}.`);
+            return;
+        }
+        
+        // Show confirmation dialog to host
+        const confirmStart = confirm(`Start game with ${onlinePlayers.length} players?\n\nPlayers:\n${onlinePlayers.map(p => `• ${p.name}`).join('\n')}`);
+        
+        if (!confirmStart) {
+            return;
+        }
+        
+        if (multiplayerClient && multiplayerClient.isHost) {
+            try {
+                multiplayerClient.startGame();
+                showNotification(`Game starting with ${onlinePlayers.length} players!`);
+            } catch (error) {
+                console.error('Error starting game:', error);
+                alert('Failed to start game. Please try again.');
+            }
+        } else {
+            alert('Connection to server lost. Please refresh and try again.');
+        }
     }
     
     function copyRoomLink() {
@@ -487,7 +692,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(roomLink).then(() => {
                 showNotification('Room link copied to clipboard!');
-                console.log('Room link copied:', roomLink);
             }).catch(err => {
                 console.error('Failed to copy link:', err);
                 fallbackCopyToClipboard(roomLink);
@@ -515,7 +719,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const successful = document.execCommand('copy');
             if (successful) {
                 showNotification('Room link copied to clipboard!');
-                console.log('Room link copied (fallback):', text);
             } else {
                 // If copy failed, show the link to user
                 showRoomLinkDialog(text);
