@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ludo Game - Login</title>
+    <link rel="stylesheet" href="login.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🎲 Ludo Master</h1>
+            <p class="creator">Created by <span class="creator-name">Shailesh Chauhan</span></p>
+        </div>
+        
+        <div class="login-form">
+            <h2>Welcome to Ludo Game!</h2>
+            <p class="subtitle">Choose your gaming experience</p>
+            
+            <div class="player-info">
+                <label for="playerName">Enter Your Name:</label>
+                <input type="text" id="playerName" placeholder="Your Name" value="Shailesh Chauhan">
+            </div>
+            
+            <div class="game-mode-selection">
+                <h3>Select Game Mode</h3>
+                <div class="mode-options">
+                    <div class="mode-card" id="offline-mode">
+                        <div class="mode-icon">🏠</div>
+                        <h4>Offline Game</h4>
+                        <p>Play with friends locally on the same device</p>
+                        <ul>
+                            <li>2-4 players</li>
+                            <li>Local multiplayer</li>
+                            <li>No internet required</li>
+                        </ul>
+                        <button class="mode-btn offline-btn">Play Offline</button>
+                    </div>
+                    
+                    <div class="mode-card" id="online-mode">
+                        <div class="mode-icon">🌐</div>
+                        <h4>Online Game</h4>
+                        <p>Play with players from around the world</p>
+                        <ul>
+                            <li>Real-time multiplayer</li>
+                            <li>Global leaderboard</li>
+                            <li>Chat with players</li>
+                        </ul>
+                        <button class="mode-btn online-btn">Play Online</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="developer-info">
+                <p>Developed with ❤️ by Shailesh Chauhan</p>
+                <p class="version">Version 1.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Online Mode Coming Soon Modal -->
+    <div id="coming-soon-modal" class="modal">
+        <div class="modal-content">
+            <h3>🚀 Coming Soon!</h3>
+            <p>Online multiplayer mode is currently under development.</p>
+            <p>For now, enjoy the offline mode with your friends!</p>
+            <button id="close-modal-btn" class="mode-btn">Got it!</button>
+        </div>
+    </div>
+    
+    <script src="login.js"></script>
+</body>
+</html>

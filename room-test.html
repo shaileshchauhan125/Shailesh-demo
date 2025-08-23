@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Link Test - Ludo Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .test-link {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+        button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .info {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎲 Ludo Game - Room Link Testing</h1>
+    
+    <div class="info">
+        <h3>📝 How Room Links Work</h3>
+        <p>Room links allow players to join games directly by clicking a link. The format is:</p>
+        <code>game.html?room=ROOMID</code>
+    </div>
+    
+    <div class="test-section">
+        <h3>🧪 Test Room Links</h3>
+        <p>Click these links to test the room joining functionality:</p>
+        
+        <div class="test-link">
+            <strong>Test Room 1:</strong><br>
+            <a href="game.html?room=ABC123" target="_blank">game.html?room=ABC123</a>
+        </div>
+        
+        <div class="test-link">
+            <strong>Test Room 2:</strong><br>
+            <a href="game.html?room=XYZ789" target="_blank">game.html?room=XYZ789</a>
+        </div>
+        
+        <div class="test-link">
+            <strong>Invalid Room (should show error):</strong><br>
+            <a href="game.html?room=INVALID" target="_blank">game.html?room=INVALID</a>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h3>🔧 Generate Test Room Link</h3>
+        <p>Create a custom room link for testing:</p>
+        <input type="text" id="customRoomId" placeholder="Enter Room ID (6 chars)" maxlength="6" style="padding: 10px; margin-right: 10px; border: 2px solid #ddd; border-radius: 4px;">
+        <button onclick="generateTestLink()">Generate Link</button>
+        <div id="generatedLink" style="margin-top: 15px;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>📱 Current Room Link Format</h3>
+        <p>When you create a room in the game, the link will be:</p>
+        <div class="test-link">
+            <span id="currentDomain"></span>/game.html?room=<strong>ROOMID</strong>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h3>🎮 Quick Actions</h3>
+        <button onclick="window.location.href='index.html'">Go to Login Page</button>
+        <button onclick="window.location.href='game.html'">Go to Game (Offline)</button>
+        <button onclick="window.location.href='game.html?room=TEST01'">Test Room Join</button>
+    </div>
+    
+    <script>
+        // Display current domain
+        document.getElementById('currentDomain').textContent = window.location.origin;
+        
+        function generateTestLink() {
+            const roomId = document.getElementById('customRoomId').value.trim().toUpperCase();
+            const linkDiv = document.getElementById('generatedLink');
+            
+            if (roomId.length !== 6) {
+                linkDiv.innerHTML = '<p style="color: red;">❌ Room ID must be exactly 6 characters</p>';
+                return;
+            }
+            
+            if (!/^[A-Z0-9]+$/.test(roomId)) {
+                linkDiv.innerHTML = '<p style="color: red;">❌ Room ID must contain only letters and numbers</p>';
+                return;
+            }
+            
+            const link = `${window.location.origin}/game.html?room=${roomId}`;
+            linkDiv.innerHTML = `
+                <div class="test-link">
+                    <strong>Generated Link:</strong><br>
+                    <a href="${link}" target="_blank">${link}</a>
+                </div>
+                <button onclick="copyToClipboard('${link}')">Copy Link</button>
+            `;
+        }
+        
+        function copyToClipboard(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Link copied to clipboard!');
+                });
+            } else {
+                // Fallback
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Link copied to clipboard!');
+            }
+        }
+        
+        // Show current URL parameters if any
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('room')) {
+            const roomFromUrl = urlParams.get('room');
+            const banner = document.createElement('div');
+            banner.style.cssText = 'background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px;';
+            banner.innerHTML = `<strong>🔗 Room Link Detected:</strong> You came here with room ID: <code>${roomFromUrl}</code>`;
+            document.body.insertBefore(banner, document.body.firstChild);
+        }
+    </script>
+</body>
+</html>

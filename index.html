@@ -3,23 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ludo Game</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Ludo Game - Login</title>
+    <link rel="stylesheet" href="login.css">
 </head>
 <body>
-    <div class="game-container">
-        <div id="ludo-board"></div>
-        <div class="controls">
-            <div id="dice">🎲</div>
-            <div id="game-status">Red's turn</div>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🎲 Ludo Master</h1>
+            <p class="creator">Created by <span class="creator-name">Shailesh Chauhan</span></p>
+        </div>
+        
+        <div class="login-form">
+            <h2>Welcome to Ludo Game!</h2>
+            <p class="subtitle">Choose your gaming experience</p>
+            
+            <div class="player-info">
+                <label for="playerName">Enter Your Name:</label>
+                <input type="text" id="playerName" placeholder="Your Name" value="Shailesh Chauhan">
+            </div>
+            
+            <div class="game-mode-selection">
+                <h3>Select Game Mode</h3>
+                <div class="mode-options">
+                    <div class="mode-card" id="offline-mode">
+                        <div class="mode-icon">🏠</div>
+                        <h4>Offline Game</h4>
+                        <p>Play with friends locally on the same device</p>
+                        <ul>
+                            <li>2-4 players</li>
+                            <li>Local multiplayer</li>
+                            <li>No internet required</li>
+                        </ul>
+                        <button class="mode-btn offline-btn">Play Offline</button>
+                    </div>
+                    
+                    <div class="mode-card" id="online-mode">
+                        <div class="mode-icon">🌐</div>
+                        <h4>Online Game</h4>
+                        <p>Play with players from around the world</p>
+                        <ul>
+                            <li>Real-time multiplayer</li>
+                            <li>Global leaderboard</li>
+                            <li>Chat with players</li>
+                        </ul>
+                        <button class="mode-btn online-btn">Play Online</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="developer-info">
+                <p>Developed with ❤️ by Shailesh Chauhan</p>
+                <p class="version">Version 1.0</p>
+            </div>
         </div>
     </div>
-    <div id="winner-overlay" class="winner-overlay">
-        <div class="winner-box">
-            <h2 id="winner-message"></h2>
-            <button id="restart-btn">Play Again</button>
+    
+    <!-- Online Game Invitation Modal -->
+    <div id="online-game-modal" class="modal">
+        <div class="modal-content online-modal">
+            <div class="modal-header">
+                <h3>🌐 Online Multiplayer</h3>
+                <button id="close-online-modal" class="close-btn">×</button>
+            </div>
+            
+            <div class="online-options">
+                <div class="option-card">
+                    <div class="option-icon">📱</div>
+                    <h4>Invite by Phone Number</h4>
+                    <p>Invite your friends using their phone number</p>
+                    <button id="invite-by-phone-btn" class="option-btn">Invite Friends</button>
+                </div>
+                
+                <div class="option-card">
+                    <div class="option-icon">🔗</div>
+                    <h4>Share Game Link</h4>
+                    <p>Create a room and share the link</p>
+                    <button id="create-room-btn" class="option-btn">Create Room</button>
+                </div>
+                
+                <div class="option-card">
+                    <div class="option-icon">🎯</div>
+                    <h4>Join Room</h4>
+                    <p>Join a friend's game room</p>
+                    <button id="join-room-btn" class="option-btn">Join Room</button>
+                </div>
+            </div>
         </div>
     </div>
-    <script src="script.js"></script>
+    
+    <!-- Phone Invitation Modal -->
+    <div id="phone-invite-modal" class="modal">
+        <div class="modal-content phone-modal">
+            <div class="modal-header">
+                <h3>� Invite Friends by Phone</h3>
+                <button id="close-phone-modal" class="close-btn">×</button>
+            </div>
+            
+            <div class="phone-invite-content">
+                <div class="player-phone-input">
+                    <label for="hostPhone">Your Phone Number:</label>
+                    <input type="tel" id="hostPhone" placeholder="+1 (555) 123-4567" required>
+                </div>
+                
+                <div class="friends-list">
+                    <h4>Invite Friends (Select 1-3 friends)</h4>
+                    <div id="friend-inputs">
+                        <div class="friend-input-group">
+                            <input type="tel" class="friend-phone" placeholder="+1 (555) 123-4567">
+                            <input type="text" class="friend-name" placeholder="Friend's Name">
+                            <button class="remove-friend">×</button>
+                        </div>
+                    </div>
+                    <button id="add-friend-btn" class="add-btn">+ Add Another Friend</button>
+                </div>
+                
+                <div class="game-settings">
+                    <h4>Game Settings</h4>
+                    <div class="setting-group">
+                        <label for="gameMode">Game Mode:</label>
+                        <select id="gameMode">
+                            <option value="classic">Classic Ludo</option>
+                            <option value="quick">Quick Game (15 min)</option>
+                            <option value="tournament">Tournament Mode</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label for="roomName">Room Name:</label>
+                        <input type="text" id="roomName" placeholder="Shailesh's Game Room">
+                    </div>
+                </div>
+                
+                <div class="invite-actions">
+                    <button id="send-invites-btn" class="primary-btn">Send Invitations</button>
+                    <button id="cancel-invite-btn" class="secondary-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Room Creation Modal -->
+    <div id="room-modal" class="modal">
+        <div class="modal-content room-modal">
+            <div class="modal-header">
+                <h3 id="room-modal-title">🔗 Create Game Room</h3>
+                <button id="close-room-modal" class="close-btn">×</button>
+            </div>
+            
+            <div id="room-content">
+                <!-- Content will be dynamically updated -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Invitation Status Modal -->
+    <div id="status-modal" class="modal">
+        <div class="modal-content status-modal">
+            <div class="modal-header">
+                <h3>📤 Invitation Status</h3>
+            </div>
+            
+            <div class="status-content">
+                <div class="status-message">
+                    <div class="loading-spinner"></div>
+                    <p id="status-text">Sending invitations...</p>
+                </div>
+                
+                <div id="invitation-results" style="display: none;">
+                    <h4>Invitation Results:</h4>
+                    <div id="results-list"></div>
+                </div>
+                
+                <div class="waiting-room" id="waiting-room" style="display: none;">
+                    <h4>🎮 Game Room: <span id="room-id"></span></h4>
+                    <p>Waiting for friends to join...</p>
+                    <div class="players-list">
+                        <h5>Players in Room:</h5>
+                        <ul id="players-in-room"></ul>
+                    </div>
+                    <div class="room-actions">
+                        <button id="start-online-game-btn" class="primary-btn" disabled>Start Game</button>
+                        <button id="copy-room-link-btn" class="secondary-btn">Copy Room Link</button>
+                        <button id="close-room-btn" class="danger-btn">Close Room</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="multiplayer_client.js"></script>
+    <script src="login.js"></script>
 </body>
 </html>
