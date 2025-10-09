@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ludo Game - Offline</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="lobby.css">
+    <style>
+        .offline-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .offline-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+        
+        .offline-message {
+            max-width: 400px;
+            margin-bottom: 30px;
+        }
+        
+        .offline-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .retry-btn, .local-game-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .retry-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .retry-btn:hover {
+            background: #45a049;
+        }
+        
+        .local-game-btn {
+            background: transparent;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+        }
+        
+        .local-game-btn:hover {
+            background: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">🎲</div>
+        <div class="offline-message">
+            <h2>You're Offline</h2>
+            <p>Don't worry! You can still play Ludo locally with AI players or wait for your connection to return for online multiplayer.</p>
+        </div>
+        <div class="offline-actions">
+            <button class="retry-btn" onclick="window.location.reload()">
+                Try Again
+            </button>
+            <button class="local-game-btn" onclick="startOfflineGame()">
+                Play Local Game
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        function startOfflineGame() {
+            // Check if we're in an installed PWA
+            const isPWAInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            
+            if (isPWAInstalled && navigator.onLine) {
+                // If we're in a PWA and online, just go to main page
+                window.location.href = '/';
+            } else {
+                // Redirect to main page with local mode
+                window.location.href = '/?mode=local&offline=true';
+            }
+        }
+        
+        // Auto-retry when connection is restored
+        window.addEventListener('online', () => {
+            window.location.href = '/';
+        });
+        
+        // If we're in an installed PWA and online, redirect immediately
+        if ((window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) && navigator.onLine) {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>
