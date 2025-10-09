@@ -58,31 +58,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Player Selection Functions
     function initPlayerSelection() {
-        // Check URL parameters first for room links
-        const urlParams = new URLSearchParams(window.location.search);
-        const roomId = urlParams.get('room');
+        console.log('🚀 initPlayerSelection() called');
         
-        if (roomId) {
+        // Check URL parameters first for online game from lobby
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('roomId');
+        const mode = urlParams.get('mode');
+        const playerName = urlParams.get('playerName');
+        const isHostParam = urlParams.get('isHost');
+        
+        console.log('📋 URL Parameters:', { roomId, mode, playerName, isHostParam });
+        
+        if (roomId && mode === 'online') {
+            console.log('🎮 Online game detected, calling handleOnlineGameStart...');
+            // Online game started from lobby
+            handleOnlineGameStart(roomId, playerName, isHostParam === 'true');
+            return;
+        }
+        
+        // Check for room link format (legacy)
+        const roomLinkId = urlParams.get('room');
+        if (roomLinkId) {
+            console.log('🔗 Room link detected:', roomLinkId);
             // User clicked on a room link
-            handleRoomLink(roomId);
+            handleRoomLink(roomLinkId);
             return;
         }
         
         // Check if user came from login page
-        const playerName = localStorage.getItem('playerName');
+        const storedPlayerName = localStorage.getItem('playerName');
         const gameMode = localStorage.getItem('gameMode');
         
-        if (!playerName) {
+        if (!storedPlayerName) {
             // Redirect to login if no valid session
             window.location.href = 'index.html';
             return;
         }
         
         // Display player name
-        playerNameDisplay.textContent = playerName;
+        playerNameDisplay.textContent = storedPlayerName;
         
         if (gameMode === 'online') {
-            // Handle online game from lobby
+            // Handle online game from lobby (fallback)
             handleOnlineGameFromLobby();
         } else {
             // Handle offline game
@@ -91,6 +108,198 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Add event listeners
         setupGameEventListeners();
+    }
+
+    function handleOnlineGameStart(roomId, playerName, isHost) {
+        console.log('🎮 handleOnlineGameStart called with:', { roomId, playerName, isHost });
+        
+        // Initialize online game directly from URL parameters
+        isOnlineGame = true;
+        gameStarted = true;
+        
+        console.log('✅ Set isOnlineGame =', isOnlineGame, ', gameStarted =', gameStarted);
+        
+        // Set up player name
+        if (playerName) {
+            if (playerNameDisplay) {
+                playerNameDisplay.textContent = playerName;
+            }
+            localStorage.setItem('playerName', playerName);
+            console.log('✅ Player name set:', playerName);
+        }
+        
+        // Load room data from localStorage or create minimal data
+        let roomData = null;
+        try {
+            roomData = JSON.parse(localStorage.getItem('roomData') || '{}');
+        } catch (e) {
+            console.warn('Could not parse room data from localStorage:', e);
+        }
+        
+        if (!roomData || !roomData.id) {
+            // Create minimal room data structure
+            roomData = {
+                id: roomId,
+                name: `Room ${roomId}`,
+                host: isHost ? playerName : 'Unknown',
+                players: []
+            };
+        }
+        
+        currentRoomData = roomData;
+        
+        // Initialize multiplayer client
+        if (!multiplayerClient) {
+            console.log('🔌 Calling initializeMultiplayerClient...');
+            initializeMultiplayerClient();
+        } else {
+            console.log('✅ Multiplayer client already exists');
+        }
+        
+        // Set up active players (for now, assume 2 players: red and green)
+        activePlayers = ['red', 'green'];
+        numberOfPlayers = activePlayers.length;
+        
+        // Determine local player color
+        const localPlayerColor = isHost ? 'red' : 'green';
+        sessionStorage.setItem('localPlayerColor', localPlayerColor);
+        
+        // Hide player selection modal
+        if (playerSelectionModal) {
+            playerSelectionModal.style.display = 'none';
+        }
+        
+        // Show dice for active players
+        allPlayers.forEach(player => {
+            const dice = playerDice[player];
+            if (activePlayers.includes(player)) {
+                dice.style.display = 'flex';
+            } else {
+                dice.style.display = 'none';
+            }
+        });
+        
+        // Initialize the game
+        initGame();
+        
+        // Set up multiplayer connection after a short delay
+        setTimeout(() => {
+            setupOnlineGameConnection(roomId, playerName, isHost);
+        }, 1000);
+    }
+
+    function setupOnlineGameConnection(roomId, playerName, isHost) {
+        if (!multiplayerClient) {
+            console.error('Multiplayer client not initialized');
+            return;
+        }
+        
+        // Connect to server if not already connected
+        if (!multiplayerClient.isConnected) {
+            multiplayerClient.connect().then(() => {
+                console.log('✅ Connected to multiplayer server');
+                
+                // Rejoin the room
+                if (isHost) {
+                    console.log('🏠 Rejoining room as host...');
+                    // For host, room should already exist, just reconnect
+                    multiplayerClient.joinRoom(roomId, playerName);
+                } else {
+                    console.log('👥 Rejoining room as guest...');
+                    multiplayerClient.joinRoom(roomId, playerName);
+                }
+            }).catch(error => {
+                console.error('❌ Failed to connect to multiplayer server:', error);
+                // Could fallback to offline mode or show error
+            });
+        }
+    }
+    
+    function initializeMultiplayerClient() {
+        console.log('🔌 Initializing multiplayer client...');
+        
+        if (typeof LudoMultiplayerClient !== 'undefined') {
+            multiplayerClient = new LudoMultiplayerClient();
+            
+            // Set up event handlers
+            multiplayerClient.onConnectionChange = (connected) => {
+                console.log('🔗 Connection status:', connected ? 'Connected' : 'Disconnected');
+                window.ws = multiplayerClient.socket; // Expose for testing
+            };
+            
+            multiplayerClient.onRoomUpdate = (eventType, roomData) => {
+                console.log('🔄 Room update:', eventType, roomData);
+                if (eventType === 'joined' && roomData) {
+                    currentRoomData = roomData;
+                }
+            };
+            
+            multiplayerClient.onGameUpdate = (eventType, gameState, players, actionType, actionData) => {
+                console.log('🎮 Game update:', eventType, actionType, actionData);
+                
+                if (actionType === 'dice_roll' && actionData) {
+                    handleRemoteDiceRoll(actionData);
+                } else if (actionType === 'move_token' && actionData) {
+                    handleRemoteTokenMove(actionData);
+                } else if (actionType === 'next_turn' && actionData) {
+                    handleRemoteTurnChange(actionData);
+                }
+            };
+            
+            // Connect to WebSocket server
+            multiplayerClient.connect().then(() => {
+                console.log('✅ Multiplayer client connected successfully');
+                
+                // Join the room if we have URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomId = urlParams.get('roomId');
+                const playerName = urlParams.get('playerName');
+                const isHost = urlParams.get('isHost') === 'true';
+                
+                if (roomId && playerName) {
+                    // Store values for global access
+                    window.roomId = roomId;
+                    window.playerName = playerName;
+                    window.isHost = isHost;
+                    window.gameMode = 'online';
+                    
+                    console.log('🎮 Joining room:', { roomId, playerName, isHost });
+                    multiplayerClient.joinRoom(roomId, playerName, isHost);
+                }
+            }).catch((error) => {
+                console.error('❌ Failed to connect to multiplayer server:', error);
+                console.warn('🔄 Retrying connection in 2 seconds...');
+                
+                // Retry connection after 2 seconds
+                setTimeout(() => {
+                    console.log('🔄 Retrying multiplayer connection...');
+                    multiplayerClient.connect().then(() => {
+                        console.log('✅ Retry successful!');
+                        window.ws = multiplayerClient.socket;
+                        
+                        // Join room on retry success
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const roomId = urlParams.get('roomId');
+                        const playerName = urlParams.get('playerName');
+                        const isHost = urlParams.get('isHost') === 'true';
+                        
+                        if (roomId && playerName) {
+                            window.roomId = roomId;
+                            window.playerName = playerName; 
+                            window.isHost = isHost;
+                            window.gameMode = 'online';
+                            
+                            multiplayerClient.joinRoom(roomId, playerName, isHost);
+                        }
+                    }).catch((retryError) => {
+                        console.error('❌ Retry failed, falling back to offline mode:', retryError);
+                        // Could show user a message about falling back to offline mode
+                    });
+                }, 2000);
+            });
+        } else {
+            console.error('LudoMultiplayerClient class not available');
+        }
     }
     
     function handleRoomLink(roomId) {
@@ -168,64 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Fallback to offline if no room data
         handleOfflineGameSelection();
-    }
-    
-    function initializeMultiplayerClient() {
-        if (typeof LudoMultiplayerClient !== 'undefined') {
-            multiplayerClient = new LudoMultiplayerClient();
-            
-            // Set up game update handler
-            multiplayerClient.onGameUpdate = (eventType, gameState, players, actionType, actionData) => {
-                
-                if (actionType === 'dice_roll' || actionType === 'diceRoll') {
-                    // Handle dice roll from other players
-                    handleRemoteDiceRoll(actionData);
-                } else if (actionType === 'move_token' || actionType === 'token_move' || actionType === 'tokenMove') {
-                    // Handle token move from other players
-                    handleRemoteTokenMove(actionData);
-                } else if (actionType === 'next_turn' || actionType === 'turn_change' || actionType === 'turnChange') {
-                    // Handle turn change
-                    handleRemoteTurnChange(actionData);
-                } else {
-                }
-            };
-            
-            // Connect to server
-            multiplayerClient.connect().then(() => {
-            }).catch(error => {
-                console.error('Failed to connect multiplayer client:', error);
-            });
-        } else {
-            console.error('LudoMultiplayerClient not available');
-        }
-    }
-    
-    function handleRemoteDiceRoll(diceData) {
-        
-        // Update dice value and current player state
-        diceValue = diceData.value;
-        
-        // If player info is provided, update current player index
-        if (diceData.playerIndex !== undefined) {
-            currentPlayerIndex = diceData.playerIndex;
-        }
-        
-        const currentPlayer = activePlayers[currentPlayerIndex];
-        const currentDice = playerDice[currentPlayer];
-        
-        if (currentDice) {
-            currentDice.textContent = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][diceValue - 1];
-            diceRolled = true;
-            status.textContent = `${playerNames[currentPlayer]} rolled a ${diceValue}`;
-            
-            // Update dice state
-            resetTurnVisuals();
-            currentDice.classList.add('active');
-            
-            checkMovableTokens();
-        } else {
-            console.error('Could not find dice for player:', currentPlayer);
-        }
     }
     
     function resetTurnVisuals() {
@@ -661,41 +812,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle remote dice rolls from other players in online games
     function handleRemoteDiceRoll(data) {
+        console.log('🎲 Received remote dice roll:', data);
         
         if (!isOnlineGame) {
+            console.log('❌ Not in online game, ignoring dice roll');
             return;
         }
         
         const { player, value, playerIndex } = data;
         const localPlayerColor = sessionStorage.getItem('localPlayerColor');
 
-        // Only process if it's not from the local player
+        console.log('🎮 Dice roll details:', {
+            player,
+            value,
+            playerIndex,
+            localPlayerColor,
+            isLocalPlayer: player === localPlayerColor
+        });
+
+        // Don't process our own dice roll
         if (player === localPlayerColor) {
+            console.log('🎲 Ignoring own dice roll');
             return;
         }
-        
+
         // Update the dice display for the remote player
         const remoteDice = playerDice[player];
         if (remoteDice) {
             remoteDice.textContent = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][value - 1];
             remoteDice.classList.remove('rolling');
-        } else {
-            console.error('❌ Could not find dice element for remote player:', player);
-        }
-        
-        // Update game state if this matches current turn
-        if (activePlayers[currentPlayerIndex] === player) {
+            
+            // Update game state
             diceValue = value;
             diceRolled = true;
-            lastDiceValue = value;
             
-            status.textContent = `${playerNames[player]} rolled a ${value}`;
+            // Update status to show which player rolled
+            const playerDisplayName = playerNames[player] || player.charAt(0).toUpperCase() + player.slice(1);
+            status.textContent = `${playerDisplayName} rolled a ${value}`;
+            status.style.color = colors[player];
             
-            // Check movable tokens for remote player
-            setTimeout(() => {
-                checkMovableTokens();
-            }, 500);
+            console.log(`✅ Updated dice display: ${playerDisplayName} rolled ${value}`);
         } else {
+            console.error('❌ Could not find dice element for player:', player);
         }
     }
 
@@ -736,13 +894,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle remote turn changes from other players in online games
     function handleRemoteTurnChange(data) {
+        console.log('🔄 Received remote turn change:', data);
         
         if (!isOnlineGame) {
+            console.log('❌ Not in online game, ignoring turn change');
             return;
         }
         
         const { currentPlayerIndex: newPlayerIndex, currentPlayer: newPlayer, previousPlayer } = data;
         const localPlayerColor = sessionStorage.getItem('localPlayerColor');
+
+        console.log('🎮 Turn change details:', {
+            newPlayerIndex,
+            newPlayer,
+            previousPlayer,
+            localPlayerColor,
+            currentActivePlayers: activePlayers
+        });
 
         // Show transition message
         const oldPlayerName = previousPlayer ? (playerNames[previousPlayer] || previousPlayer.charAt(0).toUpperCase() + previousPlayer.slice(1)) : 'Previous Player';
@@ -754,9 +922,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update the current player index
         if (typeof newPlayerIndex === 'number' && newPlayerIndex >= 0 && newPlayerIndex < activePlayers.length) {
             currentPlayerIndex = newPlayerIndex;
+            console.log('✅ Updated currentPlayerIndex to:', currentPlayerIndex);
             
             // Small delay before resetting turn to show the transition
             setTimeout(() => {
+                console.log('🔄 Calling resetTurn after remote turn change');
                 resetTurn();
             }, 500);
         } else {
@@ -792,20 +962,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear movable highlights
         document.querySelectorAll('.movable').forEach(el => el.classList.remove('movable'));
 
-        if (token.position === -1 && diceValue === 6) {
-            // Token leaving base
+        const moveSteps = 4;
+        if (token.position === -1) {
+            // Token leaving base: always set to correct starting position for its color
             token.position = startPositions[token.color];
         } else if (token.position > 52) {
             // Token already in home path
             const homePathIdx = homePaths[token.color].indexOf(token.position);
-            if (homePathIdx !== -1 && homePathIdx + diceValue < homePaths[token.color].length) {
-                token.position = homePaths[token.color][homePathIdx + diceValue];
+            if (homePathIdx !== -1 && homePathIdx + moveSteps < homePaths[token.color].length) {
+                token.position = homePaths[token.color][homePathIdx + moveSteps];
             }
         } else {
             // Token on main board path (positions 1-52)
-            const newPosition = token.position + diceValue;
+            const newPosition = token.position + moveSteps;
             const homeEntrance = homeEntrances[token.color];
-            
             // Check if token has completed a full lap and should enter its home path
             if (token.position <= homeEntrance && newPosition > homeEntrance) {
                 // Token is crossing its home entrance - enter home path
@@ -1093,8 +1263,23 @@ document.addEventListener('DOMContentLoaded', () => {
         createBoard();
         createTokens();
         currentPlayerIndex = 0;
+        
+        // Ensure game is marked as started
+        gameStarted = true;
+        
         resetTurn();
         updateBoard();
+        
+        // For online games, log the initialization
+        if (isOnlineGame) {
+            console.log('🎮 Online game initialized:', {
+                isOnlineGame,
+                gameStarted,
+                activePlayers,
+                localPlayerColor: sessionStorage.getItem('localPlayerColor'),
+                multiplayerClient: multiplayerClient ? 'available' : 'missing'
+            });
+        }
     }
 
     // Add event listeners for all player dice
@@ -1133,5 +1318,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize player selection instead of starting game immediately
     initPlayerSelection();
+    
+    // FALLBACK: Direct online game detection and initialization
+    setTimeout(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('roomId');
+        const mode = urlParams.get('mode');
+        const playerName = urlParams.get('playerName');
+        const isHostParam = urlParams.get('isHost');
+        
+        if (roomId && mode === 'online' && !window.roomId) {
+            console.log('🔄 FALLBACK: Manual online game initialization');
+            console.log('📋 Fallback URL Parameters:', { roomId, mode, playerName, isHostParam });
+            
+            // Manual initialization
+            isOnlineGame = true;
+            gameStarted = true;
+            
+            // Initialize multiplayer client directly
+            if (!multiplayerClient && typeof LudoMultiplayerClient !== 'undefined') {
+                console.log('🔌 FALLBACK: Creating multiplayer client...');
+                multiplayerClient = new LudoMultiplayerClient();
+                
+                multiplayerClient.onConnectionChange = (connected) => {
+                    console.log('🔗 FALLBACK Connection:', connected ? 'Connected' : 'Disconnected');
+                    window.ws = multiplayerClient.socket;
+                };
+                
+                // Connect and join room
+                multiplayerClient.connect().then(() => {
+                    console.log('✅ FALLBACK: Connected successfully!');
+                    
+                    // Set global variables
+                    window.roomId = roomId;
+                    window.playerName = playerName;
+                    window.isHost = isHostParam === 'true';
+                    window.gameMode = 'online';
+                    
+                    // Join room
+                    multiplayerClient.joinRoom(roomId, playerName, isHostParam === 'true');
+                    console.log('🎮 FALLBACK: Joined room');
+                    
+                }).catch((error) => {
+                    console.error('❌ FALLBACK: Connection failed:', error);
+                });
+            }
+        }
+    }, 2000);
 });
 

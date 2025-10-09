@@ -595,13 +595,21 @@ document.addEventListener('DOMContentLoaded', () => {
         
         multiplayerClient.onGameUpdate = (eventType, gameState, players, actionType, actionData) => {
             if (eventType === 'started') {
-                // Game started, redirect to game page
+                // Game started, redirect to game page with proper parameters
                 localStorage.setItem('playerName', playerNameInput.value.trim());
                 localStorage.setItem('gameMode', 'online');
                 localStorage.setItem('roomData', JSON.stringify(currentRoom));
                 localStorage.setItem('multiplayerMode', 'true');
                 
-                window.location.href = 'game.html';
+                // Pass room and player data via URL parameters
+                const urlParams = new URLSearchParams({
+                    roomId: currentRoom.id,
+                    mode: 'online',
+                    playerName: playerNameInput.value.trim(),
+                    isHost: multiplayerClient.isHost ? 'true' : 'false'
+                });
+                
+                window.location.href = `game.html?${urlParams.toString()}`;
             }
         };
         

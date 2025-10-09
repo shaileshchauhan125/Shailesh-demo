@@ -144,6 +144,7 @@ class LudoGameServer:
     async def join_room(self, websocket, data):
         room_id = data.get('roomId', '').upper()
         player_name = data.get('playerName', 'Player')
+        is_host = data.get('isHost', False)
         
         if room_id not in self.rooms:
             await websocket.send(json.dumps({
@@ -154,31 +155,55 @@ class LudoGameServer:
             return
         
         room = self.rooms[room_id]
-        success, message = room.add_player(websocket, player_name)
         
-        if success:
-            await websocket.send(json.dumps({
-                'type': 'join_room',
-                'success': True,
-                'room_id': room_id,
-                'room_name': room.room_name,
-                'players': room.get_player_list()
-            }))
-            
-            # Notify other players
-            await self.broadcast_to_room(room_id, {
-                'type': 'player_joined',
-                'player_name': player_name,
-                'players': room.get_player_list()
-            }, exclude=websocket)
-            
-            logger.info(f"Player {player_name} joined room {room_id}")
+        # Check if player is already in the room (rejoining)
+        existing_player = None
+        for ws, name in room.players.items():
+            if name == player_name:
+                existing_player = ws
+                break
+        
+        if existing_player:
+            # Player is rejoining - remove old connection and add new one
+            logger.info(f"Player {player_name} rejoining room {room_id}")
+            room.players.pop(existing_player, None)
+            room.players[websocket] = player_name
         else:
-            await websocket.send(json.dumps({
-                'type': 'join_room',
-                'success': False,
-                'error': message
-            }))
+            # New player joining
+            success, message = room.add_player(websocket, player_name)
+            if not success:
+                await websocket.send(json.dumps({
+                    'type': 'join_room',
+                    'success': False,
+                    'error': message
+                }))
+                return
+            logger.info(f"Player {player_name} joined room {room_id}")
+        
+        # Send success response with current room and game state
+        response = {
+            'type': 'join_room',
+            'success': True,
+            'room_id': room_id,
+            'room_name': room.room_name,
+            'player_name': player_name,
+            'is_host': is_host,
+            'players': room.get_player_list()
+        }
+        
+        # Include current game state if game is active
+        if hasattr(room, 'game_state') and room.game_state:
+            response['game_state'] = room.game_state
+            logger.info(f"Sending current game state to {player_name}: {room.game_state}")
+        
+        await websocket.send(json.dumps(response))
+        
+        # Notify other players
+        await self.broadcast_to_room(room_id, {
+            'type': 'player_joined',
+            'player_name': player_name,
+            'players': room.get_player_list()
+        }, exclude=websocket)
     
     async def start_game(self, websocket, data):
         room_id = data.get('roomId')
@@ -221,21 +246,30 @@ class LudoGameServer:
         action_data = data.get('actionData', {})
         
         if room_id not in self.rooms:
+            logger.warning(f"Game action for non-existent room: {room_id}")
             return
         
         room = self.rooms[room_id]
+        logger.info(f"Game action in room {room_id}: {action_type} - {action_data}")
         
         # Update game state based on action
         if action_type == 'dice_roll':
             room.game_state['diceValue'] = action_data.get('value')
+            room.game_state['currentPlayer'] = action_data.get('player')
+            room.game_state['currentPlayerIndex'] = action_data.get('playerIndex', 0)
+            logger.info(f"Dice roll: Player {action_data.get('player')} rolled {action_data.get('value')}")
         elif action_type == 'move_token':
             # Handle token movement
-            pass
+            logger.info(f"Token move: {action_data}")
         elif action_type == 'next_turn':
-            player_count = len(room.game_state['activePlayers'])
-            room.game_state['currentPlayer'] = (room.game_state['currentPlayer'] + 1) % player_count
+            old_player = action_data.get('previousPlayer')
+            new_player = action_data.get('currentPlayer')
+            new_index = action_data.get('currentPlayerIndex', 0)
+            room.game_state['currentPlayer'] = new_player
+            room.game_state['currentPlayerIndex'] = new_index
+            logger.info(f"Turn change: {old_player} -> {new_player} (index: {new_index})")
         
-        # Broadcast game state update
+        # Broadcast game state update to all players in room
         await self.broadcast_to_room(room_id, {
             'type': 'game_update',
             'action_type': action_type,
@@ -250,8 +284,11 @@ class LudoGameServer:
         room = self.rooms[room_id]
         message_str = json.dumps(message)
         
+        # Create a copy of the players dictionary keys to avoid iteration issues
+        player_websockets = list(room.players.keys())
         disconnected = []
-        for websocket in room.players.keys():
+        
+        for websocket in player_websockets:
             if websocket == exclude:
                 continue
             

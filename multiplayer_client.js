@@ -79,18 +79,19 @@ class LudoMultiplayerClient {
         }));
     }
     
-    joinRoom(roomId, playerName) {
+    joinRoom(roomId, playerName, isHost = false) {
         if (!this.isConnected) {
             throw new Error('Not connected to server');
         }
         
         this.playerName = playerName;
-        this.isHost = false;
+        this.isHost = isHost;
         
         this.socket.send(JSON.stringify({
             type: 'join_room',
             roomId: roomId,
-            playerName: playerName
+            playerName: playerName,
+            isHost: isHost
         }));
     }
     
@@ -142,6 +143,15 @@ class LudoMultiplayerClient {
                         room_name: data.room_name,
                         players: data.players
                     };
+                    
+                    // If there's an existing game state, sync it
+                    if (data.game_state) {
+                        console.log('🔄 Syncing with existing game state:', data.game_state);
+                        if (this.onGameUpdate) {
+                            this.onGameUpdate('sync', data.game_state, data.players);
+                        }
+                    }
+                    
                     if (this.onRoomUpdate) this.onRoomUpdate('joined', this.currentRoom);
                 } else {
                     if (this.onError) this.onError(data.error);
@@ -186,3 +196,4 @@ class LudoMultiplayerClient {
 if (typeof window !== 'undefined') {
     window.LudoMultiplayerClient = LudoMultiplayerClient;
 }
+// 
